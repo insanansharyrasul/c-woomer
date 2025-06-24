@@ -46,6 +46,10 @@ int main(void)
     Camera2D camera = {0};
     camera.zoom = 1.0f;
 
+    // Center the screenshot in the middle of the screen
+    camera.target.x = (screenshot_texture.width - screenWidth) / 5.0f;
+    camera.target.y = (screenshot_texture.height - screenHeight) / 5.0f;
+
     float delta_scale = 0.0f;
     Vector2 scale_pivot = {0};
     Vector2 velocity = {0};
@@ -88,7 +92,7 @@ int main(void)
         {
             Vector2 p0 = GetScreenToWorld2D(scale_pivot, camera);
             camera.zoom += delta_scale * GetFrameTime() * 2.0f;
-            camera.zoom = Clamp(camera.zoom, 0.1f, 10.0f);
+            camera.zoom = Clamp(camera.zoom, 1.0f, 10.0f);
             Vector2 p1 = GetScreenToWorld2D(scale_pivot, camera);
             camera.target = Vector2Add(camera.target, Vector2Subtract(p0, p1));
             delta_scale -= delta_scale * GetFrameTime() * 4.0f;
@@ -116,7 +120,7 @@ int main(void)
 
         // --- Draw ---
         BeginDrawing();
-        ClearBackground(BLANK);
+        ClearBackground(BLACK);
 
         BeginMode2D(camera);
 

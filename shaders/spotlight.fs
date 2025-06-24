@@ -8,32 +8,29 @@ in vec4 fragColor;
 uniform sampler2D texture0;
 uniform vec4 colDiffuse;
 
-// Custom uniforms
 uniform vec4 spotlightTint;
 uniform vec2 cursorPosition;
 uniform float spotlightRadiusMultiplier;
+
+// This is multiplied by spotlightRadiusMultiplier to obtain the radius in pixels
+const int UNIT_RADIUS = 150;
 
 // Output fragment color
 out vec4 finalColor;
 
 void main()
 {
-    // Get the base texture color
+    // Texel color fetching from texture sampler
     vec4 texelColor = texture(texture0, fragTexCoord);
-    
-    // Calculate distance from current fragment to cursor position
-    vec2 fragPos = gl_FragCoord.xy;
-    float distance = length(fragPos - cursorPosition);
-    
-    // Calculate spotlight radius (you can adjust this formula)
-    float baseRadius = 150.0;
-    float spotlightRadius = baseRadius * spotlightRadiusMultiplier;
-    
-    // Calculate spotlight effect
-    float spotlightEffect = 1.0 - smoothstep(0.0, spotlightRadius, distance);
-    
-    // Mix between the tinted version and the original texture
-    vec4 tintedColor = mix(spotlightTint, texelColor, spotlightEffect);
-    
-    finalColor = tintedColor * colDiffuse * fragColor;
+
+    // Calculate distance from the current fragment to the cursor position
+    float distanceToCursor = distance(gl_FragCoord.xy, vec2(cursorPosition.x, cursorPosition.y));
+
+    // Calculate spotlight radius in pixels
+    float spotlightRadius = float(UNIT_RADIUS) * spotlightRadiusMultiplier;
+    if (distanceToCursor > spotlightRadius)  {
+        finalColor = (mix(texelColor, vec4(spotlightTint.rgb, 1.0), spotlightTint.a) * colDiffuse);
+    } else {
+        finalColor = (texelColor * colDiffuse);
+    }
 }

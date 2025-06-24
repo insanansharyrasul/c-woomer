@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.15)
-project(woomer VERSION 1.0.0 LANGUAGES C)
+project(c-woomer VERSION 1.0.0 LANGUAGES C)
 
 # Set C standard
 set(CMAKE_C_STANDARD 99)
