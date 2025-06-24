@@ -5,6 +5,45 @@
 
 #define SPOTLIGHT_TINT CLITERAL(Color){0, 0, 0, 190}
 
+// Embedded spotlight fragment shader
+const char *spotlight_fragment_shader =
+    "#version 330\n"
+    "\n"
+    "// Input vertex attributes (from vertex shader)\n"
+    "in vec2 fragTexCoord;\n"
+    "in vec4 fragColor;\n"
+    "\n"
+    "// Input uniform values\n"
+    "uniform sampler2D texture0;\n"
+    "uniform vec4 colDiffuse;\n"
+    "\n"
+    "uniform vec4 spotlightTint;\n"
+    "uniform vec2 cursorPosition;\n"
+    "uniform float spotlightRadiusMultiplier;\n"
+    "\n"
+    "// This is multiplied by spotlightRadiusMultiplier to obtain the radius in pixels\n"
+    "const int UNIT_RADIUS = 150;\n"
+    "\n"
+    "// Output fragment color\n"
+    "out vec4 finalColor;\n"
+    "\n"
+    "void main()\n"
+    "{\n"
+    "    // Texel color fetching from texture sampler\n"
+    "    vec4 texelColor = texture(texture0, fragTexCoord);\n"
+    "\n"
+    "    // Calculate distance from the current fragment to the cursor position\n"
+    "    float distanceToCursor = distance(gl_FragCoord.xy, vec2(cursorPosition.x, cursorPosition.y));\n"
+    "\n"
+    "    // Calculate spotlight radius in pixels\n"
+    "    float spotlightRadius = float(UNIT_RADIUS) * spotlightRadiusMultiplier;\n"
+    "    if (distanceToCursor > spotlightRadius)  {\n"
+    "        finalColor = (mix(texelColor, vec4(spotlightTint.rgb, 1.0), spotlightTint.a) * colDiffuse);\n"
+    "    } else {\n"
+    "        finalColor = (texelColor * colDiffuse);\n"
+    "    }\n"
+    "}";
+
 int main(void)
 {
     // Take screenshot using grim for Wayland.
@@ -37,7 +76,7 @@ int main(void)
     UnloadImage(screenshot_image);
 
     // Load shader
-    Shader spotlight_shader = LoadShader(0, "shaders/spotlight.fs");
+    Shader spotlight_shader = LoadShaderFromMemory(0, spotlight_fragment_shader);
     int spotlight_tint_uniform_location = GetShaderLocation(spotlight_shader, "spotlightTint");
     int cursor_position_uniform_location = GetShaderLocation(spotlight_shader, "cursorPosition");
     int spotlight_radius_multiplier_uniform_location = GetShaderLocation(spotlight_shader, "spotlightRadiusMultiplier");
