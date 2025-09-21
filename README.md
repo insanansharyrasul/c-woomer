@@ -88,4 +88,5 @@ mkdir -p build && cd build && cmake .. && make -j$(nproc) && ./woomer
 - This application requires a Wayland compositor and the `grim` tool for taking screenshots
 - The application creates a temporary screenshot at `/tmp/woomer_screenshot.png`
 - Make sure you're running on a Wayland session for the screenshot functionality to work
+- Please change the `screenWidth` and `screenHeight` value manually, since raylib can't fetch the monitor size.
 
