@@ -53,7 +53,7 @@ int main(void) {
     // Take screenshot using grim for Wayland.
     const char *screenshot_path = "/tmp/woomer_screenshot.png";
     char command[256];
-    sprintf(command, "grim %s", screenshot_path);
+    snprintf(command, sizeof(command), "grim %s", screenshot_path);
     if (system(command) != 0) {
         printf("Error: Failed to take screenshot. Make sure 'grim' is "
                "installed and you are running a Wayland compositor.\n");
@@ -104,6 +104,14 @@ int main(void) {
     float spotlight_radius_multiplier = 1.0f;
     float spotlight_radius_multiplier_delta = 0.0f;
 
+    // Pre-calculate constant values outside the loop
+    Vector4 spotlight_tint_normalized = ColorNormalize(SPOTLIGHT_TINT);
+    const float screen_height = (float)screenHeight;
+
+    // Set constant shader value once
+    SetShaderValue(spotlight_shader, spotlight_tint_uniform_location,
+                   &spotlight_tint_normalized, SHADER_UNIFORM_VEC4);
+
     SetTargetFPS(144);
 
     // Main game loop
@@ -111,6 +119,9 @@ int main(void) {
         // --- Update ---
         if (IsMouseButtonDown(MOUSE_BUTTON_RIGHT) || IsKeyPressed(KEY_ESCAPE))
             break;
+
+        // Cache frame time to avoid multiple calls
+        float frame_time = GetFrameTime();
 
         bool enable_spotlight =
             IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
@@ -134,31 +145,31 @@ int main(void) {
 
         if (fabsf(delta_scale) > 0.01f) {
             Vector2 p0 = GetScreenToWorld2D(scale_pivot, camera);
-            camera.zoom += delta_scale * GetFrameTime() * 2.0f;
+            camera.zoom += delta_scale * frame_time * 2.0f;
             camera.zoom = Clamp(camera.zoom, 1.0f, 10.0f);
             Vector2 p1 = GetScreenToWorld2D(scale_pivot, camera);
             camera.target = Vector2Add(camera.target, Vector2Subtract(p0, p1));
-            delta_scale -= delta_scale * GetFrameTime() * 4.0f;
+            delta_scale -= delta_scale * frame_time * 4.0f;
         }
 
         spotlight_radius_multiplier +=
-            spotlight_radius_multiplier_delta * GetFrameTime();
+            spotlight_radius_multiplier_delta * frame_time;
         spotlight_radius_multiplier =
             Clamp(spotlight_radius_multiplier, 0.3f, 10.0f);
         spotlight_radius_multiplier_delta -=
-            spotlight_radius_multiplier_delta * GetFrameTime() * 4.0f;
+            spotlight_radius_multiplier_delta * frame_time * 4.0f;
 
         if (IsMouseButtonDown(MOUSE_BUTTON_LEFT)) {
             Vector2 delta = GetMouseDelta();
             delta = Vector2Scale(delta, -1.0f / camera.zoom);
             camera.target = Vector2Add(camera.target, delta);
-            velocity = Vector2Scale(delta, 1.0f / GetFrameTime());
+            velocity = Vector2Scale(delta, 1.0f / frame_time);
         } else {
             if (Vector2LengthSqr(velocity) > 1.0f) {
-                camera.target = Vector2Add(
-                    camera.target, Vector2Scale(velocity, GetFrameTime()));
+                camera.target = Vector2Add(camera.target,
+                                           Vector2Scale(velocity, frame_time));
                 velocity = Vector2Subtract(
-                    velocity, Vector2Scale(velocity, GetFrameTime() * 6.0f));
+                    velocity, Vector2Scale(velocity, frame_time * 6.0f));
             }
         }
 
@@ -172,13 +183,9 @@ int main(void) {
             ClearBackground(SPOTLIGHT_TINT);
 
             Vector2 mouse_position = GetMousePosition();
-            float screen_height = (float)GetScreenHeight();
             Vector2 cursor_for_shader = {mouse_position.x,
                                          screen_height - mouse_position.y};
-            Vector4 spotlight_tint_normalized = ColorNormalize(SPOTLIGHT_TINT);
 
-            SetShaderValue(spotlight_shader, spotlight_tint_uniform_location,
-                           &spotlight_tint_normalized, SHADER_UNIFORM_VEC4);
             SetShaderValue(spotlight_shader, cursor_position_uniform_location,
                            &cursor_for_shader, SHADER_UNIFORM_VEC2);
             SetShaderValue(spotlight_shader,

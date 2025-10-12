@@ -73,15 +73,6 @@ elseif(UNIX AND NOT APPLE)
     endif()
 endif()
 
-# Copy shaders directory to build directory
-if(EXISTS "${CMAKE_SOURCE_DIR}/shaders")
-    file(COPY "${CMAKE_SOURCE_DIR}/shaders" DESTINATION "${CMAKE_BINARY_DIR}")
-else()
-    # Create shaders directory if it doesn't exist
-    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/shaders")
-    message(WARNING "Shaders directory not found. Created empty shaders directory in build folder.")
-    message(WARNING "Please add your spotlight.fs shader file to the shaders directory.")
-endif()
 
 # Set output directory
 set_target_properties(${PROJECT_NAME} PROPERTIES
