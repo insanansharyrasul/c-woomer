@@ -127,9 +127,13 @@ int main(void) {
             IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
         float scrolled_amount = GetMouseWheelMove();
 
+        const float SPOTLIGHT_START = 10.0f;
+        const float SPOTLIGHT_REST = 2.5f;
+
         if (IsKeyPressed(KEY_LEFT_CONTROL) || IsKeyPressed(KEY_RIGHT_CONTROL)) {
-            spotlight_radius_multiplier = 5.0f;
-            spotlight_radius_multiplier_delta = -15.0f;
+            spotlight_radius_multiplier = SPOTLIGHT_START;
+            spotlight_radius_multiplier_delta =
+                -4.0f * (SPOTLIGHT_START - SPOTLIGHT_REST);
         }
 
         if (scrolled_amount != 0.0f) {
