@@ -73,6 +73,14 @@ make -j$(nproc)
 ### Alternative: One-liner build
 ```bash
 mkdir -p build && cd build && cmake .. && make -j$(nproc) && ./woomer
+
+```
+### Installation
+```bash
+mkdir -p build && cd build 
+cmake -DCMAKE_INSTALL_PREFIX=$HOME/.local ..
+cmake --build .
+cmake --install .
 ```
 
 ## Usage
