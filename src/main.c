@@ -1,7 +1,10 @@
+#define _POSIX_C_SOURCE 200809L
 #include "raylib.h"
 #include "raymath.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define SPOTLIGHT_TINT CLITERAL(Color){0, 0, 0, 190}
 
@@ -49,14 +52,79 @@ const char *spotlight_fragment_shader =
     "    }\n"
     "}";
 
+// [opt] Start grim in the background, streaming an uncompressed PPM to a
+// pipe. No PNG encode, no file on disk, and we don't block while it works.
+// Safe to fork here: the process is still single-threaded.
+static pid_t start_capture(int *out_fd) {
+    int fds[2];
+    if (pipe(fds) != 0)
+        return -1;
+
+    pid_t pid = fork();
+    if (pid < 0) {
+        close(fds[0]);
+        close(fds[1]);
+        return -1;
+    }
+    if (pid == 0) {
+        dup2(fds[1], STDOUT_FILENO);
+        close(fds[0]);
+        close(fds[1]);
+        execlp("grim", "grim", "-t", "ppm", "-", (char *)NULL);
+        _exit(127);
+    }
+
+    close(fds[1]);
+    *out_fd = fds[0];
+    return pid;
+}
+
+// [opt] Read the PPM (P6, 8-bit RGB) from the pipe straight into a raylib
+// Image, skipping the PNG decoder entirely.
+static bool read_capture(int fd, pid_t pid, Image *out) {
+    FILE *f = fdopen(fd, "rb");
+    if (!f) {
+        close(fd);
+        waitpid(pid, NULL, 0);
+        return false;
+    }
+
+    int w = 0, h = 0, maxval = 0;
+    if (fscanf(f, "P6 %d %d %d", &w, &h, &maxval) != 3 || maxval != 255 ||
+        w <= 0 || h <= 0) {
+        fclose(f);
+        waitpid(pid, NULL, 0);
+        return false;
+    }
+    fgetc(f); // exactly one whitespace byte separates header and pixel data
+
+    size_t size = (size_t)w * (size_t)h * 3;
+    unsigned char *pixels = (unsigned char *)malloc(size);
+    if (!pixels || fread(pixels, 1, size, f) != size) {
+        free(pixels);
+        fclose(f);
+        waitpid(pid, NULL, 0);
+        return false;
+    }
+    fclose(f);
+    waitpid(pid, NULL, 0);
+
+    out->data = pixels;
+    out->width = w;
+    out->height = h;
+    out->mipmaps = 1;
+    out->format = PIXELFORMAT_UNCOMPRESSED_R8G8B8;
+    return true;
+}
+
 int main(void) {
-    // Take screenshot using grim for Wayland.
-    const char *screenshot_path = "/tmp/woomer_screenshot.png";
-    char command[256];
-    snprintf(command, sizeof(command), "grim %s", screenshot_path);
-    if (system(command) != 0) {
-        printf("Error: Failed to take screenshot. Make sure 'grim' is "
-               "installed and you are running a Wayland compositor.\n");
+    // [opt] 1. Kick off the capture before anything else. grim runs in
+    //          parallel while we bring up the window, GL context and shader.
+    int capture_fd = -1;
+    pid_t grim_pid = start_capture(&capture_fd);
+    if (grim_pid < 0) {
+        printf("Error: Failed to start grim. Make sure 'grim' is installed "
+               "and you are running a Wayland compositor.\n");
         return -1;
     }
 
@@ -64,21 +132,13 @@ int main(void) {
     const int screenWidth = 2880;
     const int screenHeight = 1800;
 
+    // [opt] 2. The window starts HIDDEN so grim can never capture woomer
+    //          itself. It is only shown once the screenshot is in hand.
+    SetTraceLogLevel(LOG_WARNING);
     SetConfigFlags(FLAG_WINDOW_UNDECORATED | FLAG_WINDOW_TRANSPARENT |
-                   FLAG_VSYNC_HINT);
+                   FLAG_VSYNC_HINT | FLAG_WINDOW_HIDDEN);
     InitWindow(screenWidth, screenHeight, "woomer");
     SetWindowPosition(0, 0);
-
-    // Load screenshot texture
-    Image screenshot_image = LoadImage(screenshot_path);
-    if (screenshot_image.data == NULL) {
-        printf("Error: Failed to load screenshot image from %s.\n",
-               screenshot_path);
-        CloseWindow();
-        return -1;
-    }
-    Texture2D screenshot_texture = LoadTextureFromImage(screenshot_image);
-    UnloadImage(screenshot_image);
 
     // Load shader
     Shader spotlight_shader =
@@ -89,6 +149,29 @@ int main(void) {
         GetShaderLocation(spotlight_shader, "cursorPosition");
     int spotlight_radius_multiplier_uniform_location =
         GetShaderLocation(spotlight_shader, "spotlightRadiusMultiplier");
+
+    // Pre-calculate constant values outside the loop
+    Vector4 spotlight_tint_normalized = ColorNormalize(SPOTLIGHT_TINT);
+    const float screen_height = (float)screenHeight;
+
+    // Set constant shader value once
+    SetShaderValue(spotlight_shader, spotlight_tint_uniform_location,
+                   &spotlight_tint_normalized, SHADER_UNIFORM_VEC4);
+
+    // [opt] 3. Only now wait for the screenshot (by this point grim has
+    //          usually finished capturing and is just waiting on the pipe).
+    Image screenshot_image;
+    if (!read_capture(capture_fd, grim_pid, &screenshot_image)) {
+        printf("Error: Failed to read screenshot from grim.\n");
+        UnloadShader(spotlight_shader);
+        CloseWindow();
+        return -1;
+    }
+    Texture2D screenshot_texture = LoadTextureFromImage(screenshot_image);
+    UnloadImage(screenshot_image);
+
+    // [opt] 4. Screenshot is on the GPU: reveal the window.
+    ClearWindowState(FLAG_WINDOW_HIDDEN);
 
     // Setup Camera and state
     Camera2D camera = {0};
@@ -103,14 +186,6 @@ int main(void) {
     Vector2 velocity = {0};
     float spotlight_radius_multiplier = 1.0f;
     float spotlight_radius_multiplier_delta = 0.0f;
-
-    // Pre-calculate constant values outside the loop
-    Vector4 spotlight_tint_normalized = ColorNormalize(SPOTLIGHT_TINT);
-    const float screen_height = (float)screenHeight;
-
-    // Set constant shader value once
-    SetShaderValue(spotlight_shader, spotlight_tint_uniform_location,
-                   &spotlight_tint_normalized, SHADER_UNIFORM_VEC4);
 
     SetTargetFPS(144);
 
@@ -211,7 +286,6 @@ int main(void) {
     UnloadTexture(screenshot_texture);
     UnloadShader(spotlight_shader);
     CloseWindow();
-    remove(screenshot_path);
 
     return 0;
 }
