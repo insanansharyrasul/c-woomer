@@ -1,6 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
 #include "raylib.h"
 #include "raymath.h"
+#include "rlgl.h"
+#include "monitor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/wait.h>
@@ -55,7 +57,7 @@ const char *spotlight_fragment_shader =
 // [opt] Start grim in the background, streaming an uncompressed PPM to a
 // pipe. No PNG encode, no file on disk, and we don't block while it works.
 // Safe to fork here: the process is still single-threaded.
-static pid_t start_capture(int *out_fd) {
+static pid_t start_capture(const char *output, int *out_fd) {
     int fds[2];
     if (pipe(fds) != 0)
         return -1;
@@ -70,7 +72,7 @@ static pid_t start_capture(int *out_fd) {
         dup2(fds[1], STDOUT_FILENO);
         close(fds[0]);
         close(fds[1]);
-        execlp("grim", "grim", "-t", "ppm", "-", (char *)NULL);
+        execlp("grim", "grim", "-o", output, "-t", "ppm", "-", (char *)NULL);
         _exit(127);
     }
 
@@ -118,19 +120,26 @@ static bool read_capture(int fd, pid_t pid, Image *out) {
 }
 
 int main(void) {
+    Monitor mon;
+
+    if (!get_focused_monitor(&mon)) {
+        printf("Error: could not query the focused monitor from Hyprland.\n");
+        return -1;
+    }
     // [opt] 1. Kick off the capture before anything else. grim runs in
     //          parallel while we bring up the window, GL context and shader.
     int capture_fd = -1;
-    pid_t grim_pid = start_capture(&capture_fd);
+    pid_t grim_pid = start_capture(mon.name, &capture_fd);
     if (grim_pid < 0) {
         printf("Error: Failed to start grim. Make sure 'grim' is installed "
                "and you are running a Wayland compositor.\n");
         return -1;
     }
 
-    // Initialize Raylib Window
-    const int screenWidth = 2880;
-    const int screenHeight = 1800;
+    // const int screenWidth = 2880;
+    // const int screenHeight = 1800;
+    const int screenWidth = (int)(mon.width / mon.scale + 0.5f);
+    const int screenHeight = (int)(mon.height / mon.scale + 0.5f);
 
     // [opt] 2. The window starts HIDDEN so grim can never capture woomer
     //          itself. It is only shown once the screenshot is in hand.
@@ -152,7 +161,6 @@ int main(void) {
 
     // Pre-calculate constant values outside the loop
     Vector4 spotlight_tint_normalized = ColorNormalize(SPOTLIGHT_TINT);
-    const float screen_height = (float)screenHeight;
 
     // Set constant shader value once
     SetShaderValue(spotlight_shader, spotlight_tint_uniform_location,
@@ -178,8 +186,8 @@ int main(void) {
     camera.zoom = 1.0f;
 
     // Center the screenshot in the middle of the screen
-    camera.target.x = (screenshot_texture.width - screenWidth) / 5.0f;
-    camera.target.y = (screenshot_texture.height - screenHeight) / 5.0f;
+    // camera.target.x = (screenshot_texture.width - screenWidth) / 5.0f;
+    // camera.target.y = (screenshot_texture.height - screenHeight) / 5.0f;
 
     float delta_scale = 0.0f;
     Vector2 scale_pivot = {0};
@@ -197,6 +205,9 @@ int main(void) {
 
         // Cache frame time to avoid multiple calls
         float frame_time = GetFrameTime();
+        const float win_w = (float)GetScreenWidth();
+        const float win_h = (float)GetScreenHeight();
+        const float px = (float)screenshot_texture.width / win_w;
 
         bool enable_spotlight =
             IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
@@ -254,6 +265,7 @@ int main(void) {
 
         // --- Draw ---
         BeginDrawing();
+        rlViewport(0, 0, screenshot_texture.width, screenshot_texture.height);
         ClearBackground(BLACK);
 
         BeginMode2D(camera);
@@ -262,8 +274,8 @@ int main(void) {
             ClearBackground(SPOTLIGHT_TINT);
 
             Vector2 mouse_position = GetMousePosition();
-            Vector2 cursor_for_shader = {mouse_position.x,
-                                         screen_height - mouse_position.y};
+            Vector2 cursor_for_shader = {mouse_position.x * px,
+                                         (win_h - mouse_position.y) - px};
 
             SetShaderValue(spotlight_shader, cursor_position_uniform_location,
                            &cursor_for_shader, SHADER_UNIFORM_VEC2);
@@ -272,10 +284,10 @@ int main(void) {
                            &spotlight_radius_multiplier, SHADER_UNIFORM_FLOAT);
 
             BeginShaderMode(spotlight_shader);
-            DrawTexture(screenshot_texture, 0, 0, WHITE);
+            DrawTextureEx(screenshot_texture, (Vector2){0, 0}, 0.0f, 1.0f / px, WHITE);
             EndShaderMode();
         } else {
-            DrawTexture(screenshot_texture, 0, 0, WHITE);
+            DrawTextureEx(screenshot_texture, (Vector2){0, 0}, 0.0f, 1.0f / px, WHITE);
         }
 
         EndMode2D();
