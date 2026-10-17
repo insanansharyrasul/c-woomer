@@ -1,6 +1,6 @@
 # C-Woomer
 
-This is repository is vibe coded by seeing [woomer](https://github.com/coffeeispower/woomer) because it has a problem by not running correctly on my laptop and only show a quarter screen of it so i made it in C.
+This is repository is vibe coded by seeing [woomer](https://github.com/coffeeispower/woomer) because it has a problem by not running correctly on my laptop and only show a quarter screen of it so i made it in C. This script is exclusive to Hyprland user as the program needs to request to Hyprland IPC to do dynamic resizing of the window.
 
 ## Features
 
@@ -9,11 +9,13 @@ This is repository is vibe coded by seeing [woomer](https://github.com/coffeeisp
 - Wayland support using `grim` for screenshots
 - Smooth camera controls with momentum
 - Mouse wheel zoom and Ctrl+Shift for spotlight radius adjustment
+- Dynamic window resizing using Hyprland IPC
 
 ## Dependencies
 
 - **raylib** - Graphics library
 - **grim** - Screenshot tool for Wayland (install via your package manager)
+- **hyprland** - Wayland compositor 
 
 ## Building
 
@@ -24,6 +26,7 @@ Make sure you have the following installed:
 - A C compiler (GCC or Clang)
 - raylib development libraries (optional - will be downloaded automatically if not found)
 - grim (for Wayland screenshot functionality)
+- Hyprland (for dynamic window resizing)
 
 ### Ubuntu/Debian
 ```bash
