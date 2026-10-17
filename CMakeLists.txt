@@ -46,6 +46,8 @@ endif()
 # Create executable
 add_executable(${PROJECT_NAME}
     src/main.c
+    src/monitor.c
+    src/monitor.h
 )
 
 # Link libraries
