@@ -136,10 +136,8 @@ int main(void) {
         return -1;
     }
 
-    // const int screenWidth = 2880;
-    // const int screenHeight = 1800;
-    const int screenWidth = (int)(mon.width / mon.scale + 0.5f);
-    const int screenHeight = (int)(mon.height / mon.scale + 0.5f);
+    const int screenWidth = mon.width;
+    const int screenHeight = mon.height;
 
     // [opt] 2. The window starts HIDDEN so grim can never capture woomer
     //          itself. It is only shown once the screenshot is in hand.
