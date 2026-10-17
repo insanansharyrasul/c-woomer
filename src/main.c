@@ -226,7 +226,7 @@ int main(void) {
             if (enable_spotlight && shift_down) {
                 spotlight_radius_multiplier_delta += scrolled_amount;
             } else {
-                delta_scale -= scrolled_amount;
+                delta_scale += scrolled_amount;
             }
             scale_pivot = GetMousePosition();
         }
